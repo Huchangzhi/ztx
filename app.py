@@ -19,6 +19,7 @@ import ssl
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
+from collections import defaultdict
 
 load_dotenv()
 
@@ -29,40 +30,103 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 CORS(app)
 
 # ============================================================
-# Password auth
+# Password auth (multi-password support: comma-separated)
 # ============================================================
-ACCESS_PASSWORD = os.environ.get("ACCESS_PASSWORD", "admin123")
-# Store the password and generate a server token
-SERVER_TOKEN = hashlib.sha256(
-    (ACCESS_PASSWORD + "_dictation_secret").encode()
-).hexdigest()
+ACCESS_PASSWORDS = [p.strip() for p in os.environ.get("ACCESS_PASSWORD", "admin123").split(",") if p.strip()]
+PASSWORD_TO_TOKEN = {
+    p: hashlib.sha256((p + "_dictation_secret").encode()).hexdigest()
+    for p in ACCESS_PASSWORDS
+}
+ADMIN_TOKENS = set(PASSWORD_TO_TOKEN.values())
+
+# Guest token - no password required, limited access
+GUEST_TOKEN = hashlib.sha256(b"guest_dictation_secret").hexdigest()
+
+# ============================================================
+# Rate limiter (per browser client)
+# ============================================================
+LOGIN_FAILURES = defaultdict(list)
+RATE_WINDOW = 60
+RATE_MAX = 3
+
+
+def check_rate_limit(client_id):
+    now = time.time()
+    cutoff = now - RATE_WINDOW
+    # Remove entries older than the window
+    LOGIN_FAILURES[client_id] = [t for t in LOGIN_FAILURES[client_id] if t > cutoff]
+    return len(LOGIN_FAILURES[client_id]) < RATE_MAX
+
+
+def record_failure(client_id):
+    LOGIN_FAILURES[client_id].append(time.time())
+
+
+def clear_rate_limit(client_id):
+    LOGIN_FAILURES.pop(client_id, None)
 
 
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.headers.get("X-Auth-Token", "")
-        if auth != SERVER_TOKEN:
-            auth_header = request.headers.get("Authorization", "")
-            if auth_header.startswith("Bearer ") and auth_header[7:] == SERVER_TOKEN:
-                return f(*args, **kwargs)
-            # Also check password directly (for login)
-            pwd = request.headers.get("X-Password", "")
-            if pwd == ACCESS_PASSWORD:
-                return f(*args, **kwargs)
-            return jsonify({"error": "unauthorized"}), 401
-        return f(*args, **kwargs)
+        if auth in ADMIN_TOKENS or auth == GUEST_TOKEN:
+            return f(*args, **kwargs)
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer ") and auth_header[7:] in ADMIN_TOKENS:
+            return f(*args, **kwargs)
+        # Also check password directly
+        pwd = request.headers.get("X-Password", "")
+        if pwd in ACCESS_PASSWORDS:
+            return f(*args, **kwargs)
+        return jsonify({"error": "unauthorized"}), 401
+
+    return decorated
+
+
+def require_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get("X-Auth-Token", "")
+        if auth in ADMIN_TOKENS:
+            return f(*args, **kwargs)
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer ") and auth_header[7:] in ADMIN_TOKENS:
+            return f(*args, **kwargs)
+        pwd = request.headers.get("X-Password", "")
+        if pwd in ACCESS_PASSWORDS:
+            return f(*args, **kwargs)
+        return jsonify({"error": "游客模式不支持此功能"}), 403
 
     return decorated
 
 
 @app.route("/api/login", methods=["POST"])
 def login():
+    client_id = request.headers.get("X-Client-Id", "")
+    if not client_id:
+        return jsonify({"error": "missing client id", "ok": False}), 400
+    if not check_rate_limit(client_id):
+        return jsonify({"error": "登录尝试过于频繁，请稍后再试", "ok": False}), 429
+
     data = request.get_json(silent=True) or {}
     pwd = data.get("password", "")
-    if pwd == ACCESS_PASSWORD:
-        return jsonify({"token": SERVER_TOKEN, "ok": True})
+    if pwd in PASSWORD_TO_TOKEN:
+        clear_rate_limit(client_id)
+        return jsonify({"token": PASSWORD_TO_TOKEN[pwd], "ok": True, "guest": False})
+    record_failure(client_id)
     return jsonify({"error": "密码错误", "ok": False}), 401
+
+
+@app.route("/api/guest-login", methods=["POST"])
+def guest_login():
+    client_id = request.headers.get("X-Client-Id", "")
+    if not client_id:
+        return jsonify({"error": "missing client id", "ok": False}), 400
+    if not check_rate_limit(client_id):
+        return jsonify({"error": "登录尝试过于频繁，请稍后再试", "ok": False}), 429
+    clear_rate_limit(client_id)
+    return jsonify({"token": GUEST_TOKEN, "ok": True, "guest": True})
 
 
 # ============================================================
@@ -246,7 +310,7 @@ def voices():
 # OpenAI AI word recognition
 # ============================================================
 @app.route("/api/ai-words", methods=["POST"])
-@require_auth
+@require_admin
 def ai_words():
     data = request.get_json(silent=True) or {}
     images = data.get("images", [])
@@ -435,5 +499,5 @@ def static_files(path):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    logger.info(f"Starting server on port {port}, password: {ACCESS_PASSWORD}")
+    logger.info(f"Starting server on port {port}, passwords: {ACCESS_PASSWORDS}")
     app.run(host="0.0.0.0", port=port, debug=True)

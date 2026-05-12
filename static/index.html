@@ -199,11 +199,12 @@
   <div class="login-overlay" id="loginOverlay">
     <div class="login-card">
       <h1>智听写</h1>
-      <p>请输入访问密码</p>
+      <p>请输入访问密码，或使用游客模式</p>
       <div class="form-group">
         <input type="password" id="loginPwd" placeholder="请输入密码" @keyup.enter="doLogin">
       </div>
       <button class="btn btn-primary btn-block" onclick="doLogin()">进入系统</button>
+      <button class="btn btn-outline btn-block mt-8" onclick="guestLogin()" style="margin-top:8px">👤 游客模式（免密码）</button>
       <div id="loginError" class="text-secondary text-center mt-8" style="color:var(--danger)"></div>
     </div>
   </div>
@@ -215,6 +216,7 @@
     <button class="nav-btn" data-page="lists">词库管理</button>
     <button class="nav-btn" data-page="settings">设置</button>
   </div>
+  <div id="guestBadge" class="hidden" style="text-align:center;font-size:12px;color:var(--warning);margin-bottom:8px;font-weight:500">👤 游客模式 · AI识别不可用</div>
 
   <!-- Page: Dictation -->
   <div id="pageDictate" class="page">
@@ -328,7 +330,7 @@
         <label>TTS 引擎</label>
         <select id="ttsEngine" onchange="saveTtsSettings()">
           <option value="edge">Edge TTS (高质量)</option>
-          <option value="webspeech">Web Speech API (浏览器内置)</option>
+          <option value="webspeech">Web Speech API (浏览器内置 · 仅edge浏览器)</option>
         </select>
       </div>
       <div class="form-group">
@@ -372,6 +374,7 @@
         Edge TTS 引擎朗读词语<br>
         AI 识别由后端配置
       </p>
+      <button class="btn btn-outline btn-block mt-16" onclick="logout()" style="color:var(--danger);border-color:var(--danger)">退出登录</button>
     </div>
   </div>
 </div>
@@ -383,8 +386,13 @@
 // ============================================================
 // State
 // ============================================================
+const CLIENT_ID = localStorage.getItem('dictation_client_id') ||
+  'client_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+localStorage.setItem('dictation_client_id', CLIENT_ID);
+
 const STATE = {
   token: localStorage.getItem('dictation_token') || '',
+  isGuest: localStorage.getItem('dictation_guest') === 'true',
   currentList: null,
   currentIndex: 0,
   showWord: false,
@@ -422,6 +430,10 @@ async function api(path, opts = {}) {
     showLogin();
     throw new Error('未授权，请重新登录');
   }
+  if (res.status === 403) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '权限不足');
+  }
   return res;
 }
 
@@ -436,13 +448,19 @@ async function doLogin() {
   try {
     const res = await fetch(`${API_BASE}/api/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT_ID },
       body: JSON.stringify({ password: pwd }),
     });
+    if (res.status === 429) {
+      errEl.textContent = '登录尝试过于频繁，请稍后再试';
+      return;
+    }
     const data = await res.json();
     if (data.ok) {
       STATE.token = data.token;
+      STATE.isGuest = false;
       localStorage.setItem('dictation_token', data.token);
+      localStorage.removeItem('dictation_guest');
       document.getElementById('loginOverlay').classList.add('hidden');
       initApp();
     } else {
@@ -453,8 +471,59 @@ async function doLogin() {
   }
 }
 
+async function guestLogin() {
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/guest-login`, { method: 'POST', headers: { 'X-Client-Id': CLIENT_ID } });
+    if (res.status === 429) {
+      errEl.textContent = '登录尝试过于频繁，请稍后再试';
+      return;
+    }
+    const data = await res.json();
+    if (data.ok) {
+      STATE.token = data.token;
+      STATE.isGuest = true;
+      localStorage.setItem('dictation_token', data.token);
+      localStorage.setItem('dictation_guest', 'true');
+      document.getElementById('loginOverlay').classList.add('hidden');
+      initApp();
+    } else {
+      errEl.textContent = data.error || '游客模式不可用';
+    }
+  } catch (e) {
+    errEl.textContent = '连接服务器失败: ' + e.message;
+  }
+}
+
 function showLogin() {
+  STATE.isGuest = false;
+  localStorage.removeItem('dictation_guest');
   document.getElementById('loginOverlay').classList.remove('hidden');
+}
+
+function logout() {
+  STATE.token = '';
+  STATE.isGuest = false;
+  localStorage.removeItem('dictation_token');
+  localStorage.removeItem('dictation_guest');
+  showLogin();
+  toast('已退出登录', 'success');
+}
+
+function updateGuestUI() {
+  const badge = document.getElementById('guestBadge');
+  const btn = document.getElementById('btnAiExtract');
+  const userPromptGroup = document.getElementById('importUserPrompt')?.closest('.form-group');
+  if (STATE.isGuest) {
+    badge.classList.remove('hidden');
+    if (btn) { btn.disabled = true; btn.title = '游客模式不支持AI识别'; btn.textContent = '🤖 AI 识别词语（游客模式不可用）'; }
+    if (userPromptGroup) userPromptGroup.style.opacity = '0.5';
+  } else {
+    badge.classList.add('hidden');
+    if (btn) { btn.disabled = false; btn.title = ''; btn.textContent = '🤖 AI 识别词语'; }
+    if (userPromptGroup) userPromptGroup.style.opacity = '1';
+  }
 }
 
 // ============================================================
@@ -468,6 +537,7 @@ function switchPage(name) {
   const btn = document.querySelector(`.nav-btn[data-page="${name}"]`);
   if (btn) btn.classList.add('active');
   if (name === 'lists') renderLists();
+  if (name === 'import') updateGuestUI();
 }
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -685,6 +755,10 @@ let currentWords = [];
 let editingId = null;
 
 async function aiExtract() {
+  if (STATE.isGuest) {
+    toast('游客模式不支持AI识别功能', 'error');
+    return;
+  }
   const settings = STATE.settings;
   if (uploadedImages.length === 0) {
     toast('请先上传图片', 'error');
@@ -1028,6 +1102,7 @@ async function initApp() {
   loadSettings();
   await loadVoices();
   renderLists();
+  updateGuestUI();
   
   // Auto-start last used dictation
   if (STATE.savedLists.length > 0) {
@@ -1037,6 +1112,7 @@ async function initApp() {
 
 // Check token on load
 if (STATE.token) {
+  STATE.isGuest = localStorage.getItem('dictation_guest') === 'true';
   document.getElementById('loginOverlay').classList.add('hidden');
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
