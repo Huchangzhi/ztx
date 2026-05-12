@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智听写</title>
+<style>
+  :root {
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #1e293b;
+    --text-secondary: #64748b;
+    --border: #e2e8f0;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .app { max-width: 800px; margin: 0 auto; padding: 16px; }
+  
+  /* Login */
+  .login-overlay {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+  }
+  .login-card {
+    background: var(--card); padding: 40px; border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.08); width: 90%; max-width: 380px;
+  }
+  .login-card h1 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+  .login-card p { text-align: center; color: var(--text-secondary); margin-bottom: 24px; font-size: 14px; }
+  
+  /* Nav */
+  .nav {
+    display: flex; gap: 4px; background: var(--card); border-radius: 12px;
+    padding: 4px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    overflow-x: auto;
+  }
+  .nav-btn {
+    flex: 1; padding: 10px 8px; border: none; background: transparent;
+    border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-secondary);
+    white-space: nowrap; transition: all .2s; font-weight: 500;
+  }
+  .nav-btn:hover { background: #f1f5f9; }
+  .nav-btn.active { background: var(--primary); color: #fff; }
+  
+  /* Card */
+  .card {
+    background: var(--card); border-radius: 12px; padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); margin-bottom: 16px;
+  }
+  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  
+  /* Form */
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: var(--text-secondary); }
+  input, textarea, select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 14px; outline: none; transition: border .2s;
+    font-family: inherit; background: #fff;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,.1); }
+  textarea { resize: vertical; min-height: 80px; }
+  .form-group { margin-bottom: 14px; }
+  
+  /* Buttons */
+  .btn {
+    padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;
+    font-size: 14px; font-weight: 500; transition: all .2s; display: inline-flex;
+    align-items: center; gap: 6px; justify-content: center;
+  }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover:not(:disabled) { background: #16a34a; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover:not(:disabled) { background: #dc2626; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover:not(:disabled) { background: #f1f5f9; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-block { width: 100%; }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  
+  /* Words */
+  .word-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .word-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: #eef2ff; color: var(--primary);
+    border-radius: 20px; font-size: 14px; font-weight: 500;
+  }
+  .word-tag .del { cursor: pointer; font-size: 16px; line-height: 1; opacity: .6; }
+  .word-tag .del:hover { opacity: 1; }
+  
+  /* Image upload */
+  .upload-zone {
+    border: 2px dashed var(--border); border-radius: 12px; padding: 20px;
+    text-align: center; cursor: pointer; transition: all .2s; margin-bottom: 12px;
+  }
+  .upload-zone:hover { border-color: var(--primary); background: #f8faff; }
+  .upload-zone.has-images { border-color: var(--success); }
+  .preview-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .preview-grid img {
+    width: 80px; height: 80px; object-fit: cover; border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  
+  /* Dictation */
+  .dictation-header { text-align: center; margin-bottom: 20px; }
+  .dictation-header h2 { font-size: 18px; margin-bottom: 4px; }
+  .dictation-header p { color: var(--text-secondary); font-size: 13px; }
+  .dictation-word-area {
+    min-height: 120px; display: flex; align-items: center; justify-content: center;
+    font-size: 48px; font-weight: 700; color: var(--primary); margin: 20px 0;
+    background: #f8faff; border-radius: 12px; border: 2px dashed var(--border);
+    transition: all .3s; user-select: none;
+  }
+  .dictation-word-area.hidden { color: transparent; background: #f1f5f9; }
+  .dictation-word-area.hidden::after { content: '???'; color: var(--text-secondary); font-size: 24px; }
+  .dictation-word-area.show { color: var(--primary); background: #eef2ff; border-color: var(--primary); }
+  .dictation-controls {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px;
+  }
+  .dictation-controls .btn { min-width: 80px; padding: 12px 24px; }
+  .dictation-progress {
+    text-align: center; color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;
+  }
+  
+  /* Lists */
+  .saved-list {
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px;
+    margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; transition: all .2s;
+  }
+  .saved-list:hover { background: #f8faff; border-color: var(--primary); }
+  .saved-list-info { flex: 1; }
+  .saved-list-title { font-weight: 600; font-size: 14px; }
+  .saved-list-meta { font-size: 12px; color: var(--text-secondary); }
+  
+  /* Loading */
+  .loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 20px; }
+  .spinner {
+    width: 20px; height: 20px; border: 2px solid var(--border);
+    border-top-color: var(--primary); border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* Toast */
+  .toast-container { position: fixed; top: 20px; right: 20px; z-index: 200; }
+  .toast {
+    background: var(--card); padding: 12px 20px; border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.12); margin-bottom: 8px;
+    font-size: 14px; animation: slideIn .3s ease; max-width: 360px;
+    border-left: 4px solid var(--primary);
+  }
+  .toast.error { border-left-color: var(--danger); }
+  .toast.success { border-left-color: var(--success); }
+  @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  
+  .hidden { display: none !important; }
+  .mt-8 { margin-top: 8px; }
+  .mt-16 { margin-top: 16px; }
+  .mb-8 { margin-bottom: 8px; }
+  .text-center { text-align: center; }
+  .text-secondary { color: var(--text-secondary); font-size: 13px; }
+  .gap-8 { gap: 8px; }
+  .flex { display: flex; }
+  .flex-1 { flex: 1; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+
+  /* Progress bar */
+  .playing-indicator { text-align: center; margin: 8px 0; }
+  .playing-indicator .count { font-size: 13px; color: var(--text-secondary); }
+  .progress-dots { display: flex; gap: 4px; justify-content: center; margin-top: 4px; }
+  .progress-dots .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+    transition: all .3s;
+  }
+  .progress-dots .dot.active { background: var(--primary); transform: scale(1.3); }
+  .progress-dots .dot.done { background: var(--success); }
+
+  /* Word input row */
+  .word-input-row { display: flex; gap: 8px; margin: 8px 0; }
+  .word-input-row input { flex: 1; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- Login -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-card">
+      <h1>智听写</h1>
+      <p>请输入访问密码</p>
+      <div class="form-group">
+        <input type="password" id="loginPwd" placeholder="请输入密码" @keyup.enter="doLogin">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="doLogin()">进入系统</button>
+      <div id="loginError" class="text-secondary text-center mt-8" style="color:var(--danger)"></div>
+    </div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav" id="navBar">
+    <button class="nav-btn active" data-page="dictate">听写</button>
+    <button class="nav-btn" data-page="import">导入词语</button>
+    <button class="nav-btn" data-page="lists">词库管理</button>
+    <button class="nav-btn" data-page="settings">设置</button>
+  </div>
+
+  <!-- Page: Dictation -->
+  <div id="pageDictate" class="page">
+    <div class="card" id="dictateNoList">
+      <p class="text-center text-secondary">暂无词库，请先导入词语</p>
+      <button class="btn btn-primary btn-block mt-16" onclick="switchPage('import')">去导入词语</button>
+    </div>
+    <div id="dictateContent" class="hidden">
+      <div class="dictation-header">
+        <h2 id="dictateTitle">听写</h2>
+        <p id="dictateProgress" class="text-secondary">第 0/0 个词语</p>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+          <input type="number" id="jumpInput" min="1" style="width:80px;text-align:center" placeholder="跳转">
+          <button class="btn btn-outline btn-sm" onclick="jumpToWord()">跳转</button>
+        </div>
+      </div>
+      <div class="dictation-word-area hidden" id="wordDisplay">词语</div>
+      <div class="playing-indicator hidden" id="playingIndicator">
+        <div class="count" id="playCountText">正在播放... 第 1/3 遍</div>
+        <div class="progress-dots" id="playDots">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+      <div class="dictation-controls">
+        <button class="btn btn-outline" id="btnPrev" onclick="prevWord()">◀ 上一个</button>
+        <button class="btn btn-primary" id="btnReplay" onclick="replayWord()">🔊 重放</button>
+        <button class="btn btn-success" id="btnShow" onclick="toggleShowWord()">👁 展示词语</button>
+        <button class="btn btn-outline" id="btnNext" onclick="nextWord()">下一个 ▶</button>
+      </div>
+      <div class="text-center mt-16">
+        <button class="btn btn-outline btn-sm" onclick="selectWordList()">切换词库</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page: Import -->
+  <div id="pageImport" class="page hidden">
+    <div class="card">
+      <div class="card-title">导入听写词语</div>
+      <div class="form-group">
+        <label>听写标题</label>
+        <input id="importTitle" placeholder="例如：第三单元生字听写" value="语文听写">
+      </div>
+      <div class="form-group">
+        <label>上传词语图片（可多张）</label>
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+          <div id="uploadPlaceholder">
+            <div style="font-size:32px;margin-bottom:8px">📄</div>
+            <div>点击上传图片</div>
+            <div class="text-secondary">支持 JPG / PNG / WEBP</div>
+          </div>
+          <div class="preview-grid hidden" id="previewGrid"></div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden onchange="handleFiles(this.files)">
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <label class="btn btn-outline btn-sm" style="cursor:pointer;margin:0">
+            📷 拍照上传
+            <input type="file" accept="image/*" capture="environment" hidden onchange="handleFiles(this.files)">
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>补充提示词（可选，将附加到 AI 提示中）</label>
+        <textarea id="importUserPrompt" rows="4" placeholder="例如：提取所有四字成语、注意多音字、包含拼音等"></textarea>
+      </div>
+      <button class="btn btn-primary btn-block" id="btnAiExtract" onclick="aiExtract()">
+        🤖 AI 识别词语
+      </button>
+      <div id="aiLoading" class="loading hidden">
+        <div class="spinner"></div>
+        <span>AI 正在识别中，请稍候...</span>
+      </div>
+
+      <div class="mt-16">
+        <label>手动添加词语</label>
+        <div class="word-input-row">
+          <textarea id="newWordInput" rows="2" placeholder="每行一个词语，支持批量添加" style="resize:vertical;min-height:40px"></textarea>
+          <button class="btn btn-outline btn-sm" onclick="addWord()" style="align-self:flex-start">添加</button>
+        </div>
+        <div class="word-tags" id="wordTags"></div>
+        <div id="importResult" class="mt-8">
+          <div class="btn-group">
+            <button class="btn btn-success" onclick="saveWordList()">💾 保存词库</button>
+            <button class="btn btn-outline" onclick="clearImport()">清空</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page: Lists -->
+  <div id="pageLists" class="page hidden">
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>已保存的词库</span>
+        <button class="btn btn-primary btn-sm" onclick="switchPage('import')">＋ 新建</button>
+      </div>
+      <div id="listsContainer">
+        <p class="text-center text-secondary">暂无保存的词库</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page: Settings -->
+  <div id="pageSettings" class="page hidden">
+    <div class="card">
+      <div class="card-title">TTS 语音设置</div>
+      <div class="form-group">
+        <label>TTS 引擎</label>
+        <select id="ttsEngine" onchange="saveTtsSettings()">
+          <option value="edge">Edge TTS (高质量)</option>
+          <option value="webspeech">Web Speech API (浏览器内置)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>朗读语音</label>
+        <select id="ttsVoice" onchange="saveTtsSettings()"></select>
+      </div>
+      <!--
+      <div class="form-group">
+        <label>语速</label>
+        <input type="range" id="ttsRate" min="0.5" max="2.0" step="0.1" value="1.0" oninput="saveTtsSettings()">
+        <span id="ttsRateLabel">1.0x</span>
+      </div>
+      -->
+      <button class="btn btn-outline btn-block" onclick="testTTS()">🔊 测试语音</button>
+    </div>
+    <div class="card">
+      <div class="card-title">听写行为设置</div>
+      <div class="form-group">
+        <label>每个词语朗读次数</label>
+        <input type="number" id="settingPlayCount" min="1" max="10" value="3" onchange="saveTtsSettings()">
+      </div>
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="settingAutoPlay" onchange="saveTtsSettings()" checked>
+          切换上一词/下一词时自动朗读
+        </label>
+      </div>
+      <!--
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="settingAutoHide" onchange="saveTtsSettings()" checked>
+          展示词语后，点击下一词时自动隐藏
+        </label>
+      </div>
+      -->
+    </div>
+    <div class="card">
+      <div class="card-title">关于</div>
+      <p class="text-secondary">
+        智听写 v1.0<br>
+        Edge TTS 引擎朗读词语<br>
+        AI 识别由后端配置
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+const STATE = {
+  token: localStorage.getItem('dictation_token') || '',
+  currentList: null,
+  currentIndex: 0,
+  showWord: false,
+  isPlaying: false,
+  savedLists: JSON.parse(localStorage.getItem('dictation_lists') || '[]'),
+  voices: [],
+  settings: JSON.parse(localStorage.getItem('dictation_settings') || '{}'),
+};
+
+// ============================================================
+// API
+// ============================================================
+const API_BASE = '';
+
+async function api(path, opts = {}) {
+  const headers = { ...opts.headers };
+  if (STATE.token) headers['X-Auth-Token'] = STATE.token;
+  let body;
+  if (opts.json !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    body = JSON.stringify(opts.json);
+  } else {
+    body = opts.body;
+  }
+  const method = opts.method || (body ? 'POST' : 'GET');
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...opts,
+    method,
+    headers,
+    body,
+  });
+  if (res.status === 401) {
+    STATE.token = '';
+    localStorage.removeItem('dictation_token');
+    showLogin();
+    throw new Error('未授权，请重新登录');
+  }
+  return res;
+}
+
+// ============================================================
+// Login
+// ============================================================
+async function doLogin() {
+  const pwd = document.getElementById('loginPwd').value;
+  const errEl = document.getElementById('loginError');
+  if (!pwd) { errEl.textContent = '请输入密码'; return; }
+  errEl.textContent = '';
+  try {
+    const res = await fetch(`${API_BASE}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      STATE.token = data.token;
+      localStorage.setItem('dictation_token', data.token);
+      document.getElementById('loginOverlay').classList.add('hidden');
+      initApp();
+    } else {
+      errEl.textContent = data.error || '密码错误';
+    }
+  } catch (e) {
+    errEl.textContent = '连接服务器失败: ' + e.message;
+  }
+}
+
+function showLogin() {
+  document.getElementById('loginOverlay').classList.remove('hidden');
+}
+
+// ============================================================
+// Navigation
+// ============================================================
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const page = document.getElementById('page' + name.charAt(0).toUpperCase() + name.slice(1));
+  if (page) page.classList.remove('hidden');
+  const btn = document.querySelector(`.nav-btn[data-page="${name}"]`);
+  if (btn) btn.classList.add('active');
+  if (name === 'lists') renderLists();
+}
+
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchPage(btn.dataset.page));
+});
+
+// ============================================================
+// Settings
+// ============================================================
+function loadSettings() {
+  const s = STATE.settings;
+  if (s.ttsEngine) document.getElementById('ttsEngine').value = s.ttsEngine;
+  // if (s.ttsRate) {
+  //   document.getElementById('ttsRate').value = s.ttsRate;
+  //   document.getElementById('ttsRateLabel').textContent = s.ttsRate + 'x';
+  // }
+  if (s.playCount) document.getElementById('settingPlayCount').value = s.playCount;
+  document.getElementById('settingAutoPlay').checked = s.autoPlay !== false;
+  // document.getElementById('settingAutoHide').checked = s.autoHide !== false;
+}
+
+function saveTtsSettings() {
+  STATE.settings = {
+    ttsEngine: document.getElementById('ttsEngine').value,
+    ttsVoice: document.getElementById('ttsVoice').value,
+    // ttsRate: parseFloat(document.getElementById('ttsRate').value),
+    ttsRate: 1.0,
+    playCount: parseInt(document.getElementById('settingPlayCount').value) || 3,
+    autoPlay: document.getElementById('settingAutoPlay').checked,
+    // autoHide: document.getElementById('settingAutoHide').checked,
+  };
+  localStorage.setItem('dictation_settings', JSON.stringify(STATE.settings));
+  // document.getElementById('ttsRateLabel').textContent = document.getElementById('ttsRate').value + 'x';
+}
+
+// ============================================================
+// Voices
+// ============================================================
+async function loadVoices() {
+  const sel = document.getElementById('ttsVoice');
+  try {
+    const res = await api('/api/voices');
+    if (!res.ok) throw new Error('获取失败');
+    const list = await res.json();
+    STATE.voices = list;
+    sel.innerHTML = '';
+    const zhVoices = list.filter(v => v.Locale && v.Locale.startsWith('zh'));
+    zhVoices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.ShortName;
+      opt.textContent = `${v.LocalName || v.ShortName}`;
+      sel.appendChild(opt);
+    });
+    if (!STATE.settings.ttsVoice) STATE.settings.ttsVoice = 'zh-CN-YunxiNeural';
+    sel.value = STATE.settings.ttsVoice;
+    if (!sel.value && zhVoices.length > 0) sel.value = 'zh-CN-YunxiNeural';
+  } catch (e) {
+    sel.innerHTML = '<option value="zh-CN-YunxiNeural">云希（默认中文女声）</option>';
+    sel.innerHTML += '<option value="zh-CN-YunyangNeural">云扬（默认中文男声）</option>';
+    sel.innerHTML += '<option value="zh-CN-XiaoxiaoNeural">晓晓（中文女声）</option>';
+    sel.innerHTML += '<option value="en-US-JennyNeural">Jenny (English)</option>';
+  }
+}
+
+// ============================================================
+// TTS
+// ============================================================
+async function speakText(text) {
+  const engine = STATE.settings.ttsEngine || 'edge';
+  const voice = document.getElementById('ttsVoice').value || 'zh-CN-YunxiNeural';
+  const rate = 1.0;
+
+  if (engine === 'webspeech') {
+    return new Promise((resolve, reject) => {
+      if (playCancel) { resolve(); return; }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'zh-CN';
+      utterance.rate = rate;
+      utterance.voice = speechSynthesis.getVoices().find(v => v.lang.startsWith('zh')) || null;
+      utterance.onend = resolve;
+      utterance.onerror = (e) => { if (e.error !== 'canceled') reject(e); else resolve(); };
+      speechSynthesis.speak(utterance);
+    });
+  } else {
+    const res = await api('/api/tts', {
+      json: { text, voice, rate: String(rate) },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'TTS 失败');
+    }
+    const blob = await res.blob();
+    return blob;
+  }
+}
+
+function playBlobOnce(blob) {
+  return new Promise((resolve) => {
+    if (playCancel) { resolve(); return; }
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    const done = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+      resolve();
+    };
+    audio.onended = done;
+    audio.onerror = done;
+    audio.play().catch(done);
+    const check = setInterval(() => {
+      if (playCancel) { clearInterval(check); audio.pause(); done(); }
+    }, 100);
+  });
+}
+
+async function playTextTimes(text, times, intervalMs, onProgress) {
+  const engine = STATE.settings.ttsEngine || 'edge';
+  if (engine === 'webspeech') {
+    for (let i = 0; i < times; i++) {
+      if (playCancel) break;
+      if (onProgress) onProgress(i, times);
+      await speakText(text);
+      if (i < times - 1 && !playCancel) {
+        await sleep(intervalMs);
+      }
+    }
+  } else {
+    const blob = await speakText(text);
+    for (let i = 0; i < times; i++) {
+      if (playCancel) break;
+      if (onProgress) onProgress(i, times);
+      await playBlobOnce(blob);
+      if (i < times - 1 && !playCancel) {
+        await sleep(intervalMs);
+      }
+    }
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => {
+    const timer = setTimeout(resolve, ms);
+    // Allow cancel by checking playCancel periodically
+    const check = setInterval(() => {
+      if (playCancel) { clearTimeout(timer); clearInterval(check); resolve(); }
+    }, 200);
+  });
+}
+
+async function testTTS() {
+  try {
+    await playTextTimes('你好，这是一段语音测试。', 1, 0);
+    toast('播放成功', 'success');
+  } catch (e) {
+    toast('播放失败: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// Image upload
+// ============================================================
+const uploadedImages = [];
+
+function handleFiles(files) {
+  const grid = document.getElementById('previewGrid');
+  const placeholder = document.getElementById('uploadPlaceholder');
+  
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Compress: max side 1000px
+        let w = img.width, h = img.height;
+        const max = 1000;
+        if (w > max || h > max) {
+          if (w > h) { h = Math.round(h * max / w); w = max; }
+          else { w = Math.round(w * max / h); h = max; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL('image/jpeg', 0.85);
+        uploadedImages.push({ base64: compressed, name: file.name });
+        const thumb = document.createElement('img');
+        thumb.src = compressed;
+        grid.appendChild(thumb);
+        grid.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        document.getElementById('uploadZone').classList.add('has-images');
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Allow drag & drop
+const uploadZone = document.getElementById('uploadZone');
+uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.style.borderColor = 'var(--primary)'; });
+uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = ''; });
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.style.borderColor = '';
+  handleFiles(e.dataTransfer.files);
+});
+
+// ============================================================
+// AI word extraction
+// ============================================================
+let currentWords = [];
+let editingId = null;
+
+async function aiExtract() {
+  const settings = STATE.settings;
+  if (uploadedImages.length === 0) {
+    toast('请先上传图片', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnAiExtract');
+  const loading = document.getElementById('aiLoading');
+  btn.disabled = true;
+  loading.classList.remove('hidden');
+
+  try {
+    const res = await api('/api/ai-words', {
+      json: {
+        images: uploadedImages.map(img => ({ url: img.base64 })),
+        user_prompt: document.getElementById('importUserPrompt').value,
+      },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || '识别失败');
+    }
+    const existing = new Set(currentWords.map(w => w.trim()));
+    for (const w of data.words) {
+      const t = w.trim();
+      if (t && !existing.has(t)) {
+        currentWords.push(t);
+        existing.add(t);
+      }
+    }
+    renderWords();
+    toast(`AI 识别到 ${data.words.length} 个词语，共 ${currentWords.length} 个`, 'success');
+  } catch (e) {
+    toast('识别失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    loading.classList.add('hidden');
+  }
+}
+
+function renderWords() {
+  const container = document.getElementById('wordTags');
+  container.innerHTML = '';
+  currentWords.forEach((word, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'word-tag';
+    tag.innerHTML = `<span contenteditable="true" onblur="editWord(${i}, this.textContent)">${escapeHtml(word)}</span><span class="del" onclick="removeWord(${i})">×</span>`;
+    container.appendChild(tag);
+  });
+}
+
+function editWord(i, newText) {
+  currentWords[i] = newText.trim();
+}
+
+function removeWord(i) {
+  currentWords.splice(i, 1);
+  renderWords();
+}
+
+function addWord() {
+  const input = document.getElementById('newWordInput');
+  const lines = input.value.split('\n').map(s => s.trim()).filter(Boolean);
+  if (lines.length === 0) return;
+  const existing = new Set(currentWords.map(w => w));
+  for (const w of lines) {
+    if (!existing.has(w)) { currentWords.push(w); existing.add(w); }
+  }
+  renderWords();
+  input.value = '';
+}
+
+document.getElementById('newWordInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') addWord();
+});
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ============================================================
+// Save word list
+// ============================================================
+function saveWordList() {
+  const title = document.getElementById('importTitle').value.trim() || '未命名词库';
+  if (currentWords.length === 0) {
+    toast('没有词语可以保存', 'error');
+    return;
+  }
+  
+  if (editingId) {
+    STATE.savedLists = STATE.savedLists.filter(l => l.id !== editingId);
+    editingId = null;
+  }
+  
+  const list = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    title,
+    words: [...currentWords],
+    createdAt: new Date().toISOString(),
+  };
+  
+  STATE.savedLists.push(list);
+  localStorage.setItem('dictation_lists', JSON.stringify(STATE.savedLists));
+  toast(`词库 "${title}" 已保存 (${list.words.length} 个词语)`, 'success');
+  
+  clearImport();
+}
+
+function clearImport() {
+  currentWords = [];
+  editingId = null;
+  uploadedImages.length = 0;
+  document.getElementById('importTitle').value = '语文听写';
+  document.getElementById('importInstructions').value = '';
+  document.getElementById('wordTags').innerHTML = '';
+  document.getElementById('importResult').classList.add('hidden');
+  document.getElementById('previewGrid').innerHTML = '';
+  document.getElementById('previewGrid').classList.add('hidden');
+  document.getElementById('uploadPlaceholder').classList.remove('hidden');
+  document.getElementById('uploadZone').classList.remove('has-images');
+  document.getElementById('newWordInput').value = '';
+}
+
+// ============================================================
+// Word list management
+// ============================================================
+function renderLists() {
+  const container = document.getElementById('listsContainer');
+  if (STATE.savedLists.length === 0) {
+    container.innerHTML = '<p class="text-center text-secondary">暂无保存的词库</p>';
+    return;
+  }
+  container.innerHTML = '';
+  [...STATE.savedLists].reverse().forEach(list => {
+    const div = document.createElement('div');
+    div.className = 'saved-list';
+    div.innerHTML = `
+      <div class="saved-list-info">
+        <div class="saved-list-title">${escapeHtml(list.title)}</div>
+        <div class="saved-list-meta">${list.words.length} 个词语 · ${new Date(list.createdAt).toLocaleString('zh-CN')}</div>
+        <div class="text-secondary" style="font-size:12px;margin-top:4px">${list.words.slice(0, 8).join('、')}${list.words.length > 8 ? '...' : ''}</div>
+      </div>
+      <div class="btn-group" style="flex-shrink:0">
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();startDictation('${list.id}')">听写</button>
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();editList('${list.id}')">编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteList('${list.id}')">删除</button>
+      </div>
+    `;
+    div.onclick = () => startDictation(list.id);
+    container.appendChild(div);
+  });
+}
+
+function deleteList(id) {
+  if (!confirm('确定删除这个词库吗？')) return;
+  STATE.savedLists = STATE.savedLists.filter(l => l.id !== id);
+  localStorage.setItem('dictation_lists', JSON.stringify(STATE.savedLists));
+  renderLists();
+  toast('已删除', 'success');
+}
+
+function editList(id) {
+  const list = STATE.savedLists.find(l => l.id === id);
+  if (!list) return;
+  currentWords = [...list.words];
+  document.getElementById('importTitle').value = list.title;
+  renderWords();
+  switchPage('import');
+  editingId = id;
+  toast('正在编辑: ' + list.title, 'success');
+}
+
+// ============================================================
+// Dictation
+// ============================================================
+async function startDictation(id) {
+  const list = STATE.savedLists.find(l => l.id === id);
+  if (!list) return;
+  STATE.currentList = list;
+  STATE.currentIndex = 0;
+  STATE.showWord = false;
+  switchPage('dictate');
+  renderDictation();
+}
+
+function selectWordList() {
+  switchPage('lists');
+}
+
+function renderDictation() {
+  const list = STATE.currentList;
+  const content = document.getElementById('dictateContent');
+  const noList = document.getElementById('dictateNoList');
+  
+  if (!list || list.words.length === 0) {
+    content.classList.add('hidden');
+    noList.classList.remove('hidden');
+    return;
+  }
+  
+  content.classList.remove('hidden');
+  noList.classList.add('hidden');
+  document.getElementById('dictateTitle').textContent = list.title;
+  document.getElementById('dictateProgress').textContent = `第 ${STATE.currentIndex + 1}/${list.words.length} 个词语`;
+  document.getElementById('wordDisplay').textContent = list.words[STATE.currentIndex];
+  document.getElementById('wordDisplay').className = 'dictation-word-area hidden';
+  STATE.showWord = false;
+  
+  // Update button states
+  document.getElementById('btnPrev').disabled = STATE.currentIndex === 0;
+  document.getElementById('btnNext').disabled = STATE.currentIndex >= list.words.length - 1;
+}
+
+function prevWord() {
+  if (STATE.isPlaying) stopPlayback();
+  if (STATE.currentIndex > 0) {
+    STATE.currentIndex--;
+    hideWordOnNext();
+    renderDictation();
+    if (STATE.settings.autoPlay !== false) setTimeout(() => replayWord(), 300);
+  }
+}
+
+function nextWord() {
+  if (STATE.isPlaying) stopPlayback();
+  if (STATE.currentIndex < STATE.currentList.words.length - 1) {
+    STATE.currentIndex++;
+    hideWordOnNext();
+    renderDictation();
+    if (STATE.settings.autoPlay !== false) setTimeout(() => replayWord(), 300);
+  }
+}
+
+function hideWordOnNext() {
+  if (STATE.showWord && STATE.settings.autoHide !== false) {
+    STATE.showWord = false;
+  }
+}
+
+function jumpToWord() {
+  const input = document.getElementById('jumpInput');
+  const n = parseInt(input.value);
+  if (!n || n < 1 || n > STATE.currentList.words.length) {
+    toast(`请输入 1-${STATE.currentList.words.length} 之间的数字`, 'error');
+    return;
+  }
+  if (STATE.isPlaying) stopPlayback();
+  STATE.currentIndex = n - 1;
+  hideWordOnNext();
+  renderDictation();
+  if (STATE.settings.autoPlay !== false) setTimeout(() => replayWord(), 300);
+  input.value = '';
+}
+
+function toggleShowWord() {
+  const display = document.getElementById('wordDisplay');
+  STATE.showWord = !STATE.showWord;
+  display.className = 'dictation-word-area' + (STATE.showWord ? ' show' : ' hidden');
+  document.getElementById('btnShow').textContent = STATE.showWord ? '🙈 隐藏词语' : '👁 展示词语';
+}
+
+let playCancel = false;
+let currentAudio = null;
+
+function stopPlayback() {
+  playCancel = true;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+}
+
+async function replayWord() {
+  if (STATE.isPlaying) { stopPlayback(); return; }
+  if (!STATE.currentList || !STATE.currentList.words[STATE.currentIndex]) return;
+  
+  STATE.isPlaying = true;
+  playCancel = false;
+  currentAudio = null;
+  const playCount = STATE.settings.playCount || 3;
+  const word = STATE.currentList.words[STATE.currentIndex];
+  const indicator = document.getElementById('playingIndicator');
+  const countText = document.getElementById('playCountText');
+  const dots = document.getElementById('playDots').querySelectorAll('.dot');
+  const btnReplay = document.getElementById('btnReplay');
+  
+  // Update dots to match play count
+  const dotsContainer = document.getElementById('playDots');
+  while (dotsContainer.children.length < playCount) {
+    const d = document.createElement('div'); d.className = 'dot'; dotsContainer.appendChild(d);
+  }
+  while (dotsContainer.children.length > playCount) {
+    dotsContainer.removeChild(dotsContainer.lastChild);
+  }
+  
+  indicator.classList.remove('hidden');
+  btnReplay.textContent = '⏹ 停止';
+  btnReplay.className = 'btn btn-danger';
+  document.getElementById('btnPrev').disabled = true;
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnShow').disabled = true;
+  
+  try {
+    await playTextTimes(word, playCount, 3000, (i, total) => {
+      countText.textContent = `正在播放... 第 ${i + 1}/${total} 遍`;
+      dotsContainer.querySelectorAll('.dot').forEach((dot, idx) => {
+        dot.className = 'dot' + (idx === i ? ' active' : (idx < i ? ' done' : ''));
+      });
+    });
+  } catch (e) {
+    if (!playCancel) toast('播放出错: ' + e.message, 'error');
+  } finally {
+    STATE.isPlaying = false;
+    currentAudio = null;
+    indicator.classList.add('hidden');
+    btnReplay.textContent = '🔊 重放';
+    btnReplay.className = 'btn btn-primary';
+    document.getElementById('btnPrev').disabled = STATE.currentIndex === 0;
+    document.getElementById('btnNext').disabled = STATE.currentIndex >= STATE.currentList.words.length - 1;
+    document.getElementById('btnShow').disabled = false;
+  }
+}
+
+// ============================================================
+// Toast
+// ============================================================
+function toast(msg, type = '') {
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ============================================================
+// Init
+// ============================================================
+async function initApp() {
+  loadSettings();
+  await loadVoices();
+  renderLists();
+  
+  // Auto-start last used dictation
+  if (STATE.savedLists.length > 0) {
+    startDictation(STATE.savedLists[STATE.savedLists.length - 1].id);
+  }
+}
+
+// Check token on load
+if (STATE.token) {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('loginPwd').focus();
+  });
+}
+
+// Enter key for login
+document.getElementById('loginPwd').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') doLogin();
+});
+
+// Close audio context on page unload for Web Speech
+window.addEventListener('beforeunload', () => {
+  if (window.speechSynthesis) speechSynthesis.cancel();
+});
+</script>
+</body>
+</html>
