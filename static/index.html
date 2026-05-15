@@ -258,10 +258,13 @@
   <div id="pageImport" class="page hidden">
     <div class="card">
       <div class="card-title">导入听写词语</div>
-      <div class="form-group">
-        <label>听写标题</label>
-        <input id="importTitle" placeholder="例如：第三单元生字听写" value="语文听写">
-      </div>
+       <div class="form-group">
+         <label>听写标题</label>
+         <div style="display:flex;gap:8px;align-items:center">
+           <input id="importTitle" placeholder="例如：第三单元生字听写" value="语文听写">
+           <span id="editBadge" class="hidden" style="background:var(--warning);color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:bold">编辑中</span>
+         </div>
+       </div>
       <div class="form-group">
         <label>上传词语图片（可多张）</label>
         <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
@@ -640,7 +643,10 @@ function playBlobOnce(blob) {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     currentAudio = audio;
+    let resolved = false;
     const done = () => {
+      if (resolved) return;
+      resolved = true;
       URL.revokeObjectURL(url);
       if (currentAudio === audio) currentAudio = null;
       resolve();
@@ -651,6 +657,8 @@ function playBlobOnce(blob) {
     const check = setInterval(() => {
       if (playCancel) { clearInterval(check); audio.pause(); done(); }
     }, 100);
+    // Safety timeout: max 30 seconds
+    setTimeout(() => { clearInterval(check); done(); }, 30000);
   });
 }
 
@@ -811,7 +819,7 @@ function renderWords() {
 }
 
 function editWord(i, newText) {
-  currentWords[i] = newText.trim();
+  currentWords[i] = escapeHtml(newText.trim());
 }
 
 function removeWord(i) {
@@ -875,9 +883,10 @@ function clearImport() {
   editingId = null;
   uploadedImages.length = 0;
   document.getElementById('importTitle').value = '语文听写';
-  document.getElementById('importInstructions').value = '';
+  document.getElementById('importUserPrompt').value = '';
   document.getElementById('wordTags').innerHTML = '';
   document.getElementById('importResult').classList.add('hidden');
+  document.getElementById('editBadge').classList.add('hidden');
   document.getElementById('previewGrid').innerHTML = '';
   document.getElementById('previewGrid').classList.add('hidden');
   document.getElementById('uploadPlaceholder').classList.remove('hidden');
@@ -931,6 +940,8 @@ function editList(id) {
   renderWords();
   switchPage('import');
   editingId = id;
+  document.getElementById('importResult').classList.remove('hidden');
+  document.getElementById('editBadge').classList.remove('hidden');
   toast('正在编辑: ' + list.title, 'success');
 }
 
@@ -976,22 +987,42 @@ function renderDictation() {
 }
 
 function prevWord() {
-  if (STATE.isPlaying) stopPlayback();
+  if (STATE.isPlaying) {
+    stopPlayback();
+    setTimeout(() => doPrevWord(), 100);
+  } else {
+    doPrevWord();
+  }
+}
+
+function doPrevWord() {
   if (STATE.currentIndex > 0) {
     STATE.currentIndex--;
     hideWordOnNext();
     renderDictation();
-    if (STATE.settings.autoPlay !== false) setTimeout(() => replayWord(), 300);
+    if (STATE.settings.autoPlay !== false) {
+      setTimeout(() => replayWord(), 300);
+    }
   }
 }
 
 function nextWord() {
-  if (STATE.isPlaying) stopPlayback();
+  if (STATE.isPlaying) {
+    stopPlayback();
+    setTimeout(() => doNextWord(), 100);
+  } else {
+    doNextWord();
+  }
+}
+
+function doNextWord() {
   if (STATE.currentIndex < STATE.currentList.words.length - 1) {
     STATE.currentIndex++;
     hideWordOnNext();
     renderDictation();
-    if (STATE.settings.autoPlay !== false) setTimeout(() => replayWord(), 300);
+    if (STATE.settings.autoPlay !== false) {
+      setTimeout(() => replayWord(), 300);
+    }
   }
 }
 
@@ -1008,12 +1039,22 @@ function jumpToWord() {
     toast(`请输入 1-${STATE.currentList.words.length} 之间的数字`, 'error');
     return;
   }
-  if (STATE.isPlaying) stopPlayback();
+  if (STATE.isPlaying) {
+    stopPlayback();
+    setTimeout(() => doJumpToWord(n), 100);
+  } else {
+    doJumpToWord(n);
+  }
+  input.value = '';
+}
+
+function doJumpToWord(n) {
   STATE.currentIndex = n - 1;
   hideWordOnNext();
   renderDictation();
-  if (STATE.settings.autoPlay !== false) setTimeout(() => replayWord(), 300);
-  input.value = '';
+  if (STATE.settings.autoPlay !== false) {
+    setTimeout(() => replayWord(), 300);
+  }
 }
 
 function toggleShowWord() {
@@ -1043,16 +1084,14 @@ async function replayWord() {
   const word = STATE.currentList.words[STATE.currentIndex];
   const indicator = document.getElementById('playingIndicator');
   const countText = document.getElementById('playCountText');
-  const dots = document.getElementById('playDots').querySelectorAll('.dot');
   const btnReplay = document.getElementById('btnReplay');
   
-  // Update dots to match play count
   const dotsContainer = document.getElementById('playDots');
-  while (dotsContainer.children.length < playCount) {
-    const d = document.createElement('div'); d.className = 'dot'; dotsContainer.appendChild(d);
-  }
-  while (dotsContainer.children.length > playCount) {
-    dotsContainer.removeChild(dotsContainer.lastChild);
+  dotsContainer.innerHTML = '';
+  for (let i = 0; i < playCount; i++) {
+    const d = document.createElement('div'); 
+    d.className = 'dot'; 
+    dotsContainer.appendChild(d);
   }
   
   indicator.classList.remove('hidden');
@@ -1064,6 +1103,7 @@ async function replayWord() {
   
   try {
     await playTextTimes(word, playCount, 3000, (i, total) => {
+      if (playCancel) return;
       countText.textContent = `正在播放... 第 ${i + 1}/${total} 遍`;
       dotsContainer.querySelectorAll('.dot').forEach((dot, idx) => {
         dot.className = 'dot' + (idx === i ? ' active' : (idx < i ? ' done' : ''));

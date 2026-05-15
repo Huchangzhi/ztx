@@ -499,5 +499,5 @@ def static_files(path):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    logger.info(f"Starting server on port {port}, passwords: {ACCESS_PASSWORDS}")
-    app.run(host="0.0.0.0", port=port, debug=True)
+    logger.info(f"Starting server on port {port}, password count: {len(ACCESS_PASSWORDS)}")
+    app.run(host="0.0.0.0", port=port, debug=False)
