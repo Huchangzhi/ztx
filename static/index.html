@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智听写</title>
+<link rel="icon" href="/logo.png">
 <style>
   :root {
     --primary: #4f46e5;
@@ -36,6 +37,10 @@
     box-shadow: 0 4px 24px rgba(0,0,0,.08); width: 90%; max-width: 380px;
   }
   .login-card h1 { text-align: center; font-size: 24px; margin-bottom: 8px; }
+  .login-logo { width: 80px; height: 80px; display: block; margin: 0 auto 12px; border-radius: 12px; }
+  .app-header { display: flex; align-items: center; gap: 10px; padding: 8px 4px; }
+  .app-logo { width: 36px; height: 36px; border-radius: 8px; }
+  .app-name { font-size: 18px; font-weight: 700; color: var(--text); }
   .login-card p { text-align: center; color: var(--text-secondary); margin-bottom: 24px; font-size: 14px; }
   
   /* Nav */
@@ -198,6 +203,7 @@
   <!-- Login -->
   <div class="login-overlay" id="loginOverlay">
     <div class="login-card">
+      <img src="/logo.png" alt="智听写" class="login-logo">
       <h1>智听写</h1>
       <p>请输入访问密码，或使用游客模式</p>
       <div class="form-group">
@@ -209,6 +215,11 @@
     </div>
   </div>
 
+  <!-- Header -->
+  <div class="app-header">
+    <img src="/logo.png" alt="" class="app-logo">
+    <span class="app-name">智听写</span>
+  </div>
   <!-- Nav -->
   <div class="nav" id="navBar">
     <button class="nav-btn active" data-page="dictate">听写</button>
@@ -980,6 +991,7 @@ function renderDictation() {
   document.getElementById('wordDisplay').textContent = list.words[STATE.currentIndex];
   document.getElementById('wordDisplay').className = 'dictation-word-area hidden';
   STATE.showWord = false;
+  document.getElementById('btnShow').textContent = '👁 展示词语';
   
   // Update button states
   document.getElementById('btnPrev').disabled = STATE.currentIndex === 0;
